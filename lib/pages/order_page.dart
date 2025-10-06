@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
-import '../models/pg.dart';
 import '../models/item.dart';
 import '../models/order.dart';
 
@@ -13,118 +12,105 @@ class OrderPage extends StatefulWidget {
 
 class _OrderPageState extends State<OrderPage> {
   final FirebaseService _service = FirebaseService();
-  PG? _selectedPG;
-  final Map<Item, int> _selectedItems = {};
-  final Map<Item, TextEditingController> _controllers = {};
+  Item? _selectedItem;
+  final TextEditingController _quantityController = TextEditingController();
 
   @override
   void dispose() {
-    // Dispose all controllers
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
+    _quantityController.dispose();
     super.dispose();
+  }
+
+  void _placeOrder() async {
+    if (_selectedItem == null || _quantityController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an item and enter quantity')),
+      );
+      return;
+    }
+
+    final qty = int.tryParse(_quantityController.text);
+    if (qty == null || qty <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid quantity')),
+      );
+      return;
+    }
+
+    final order = Orders(
+      id: '',
+      itemId: _selectedItem!.id,
+      quantity: qty,
+      date: DateTime.now(),
+    );
+
+    await _service.addOrder(order);
+
+    _quantityController.clear();
+    setState(() => _selectedItem = null);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Order placed successfully — stock updated!')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Order Items')),
-      body: Column(
-        children: [
-          StreamBuilder<List<PG>>(
-            stream: _service.getPGs(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
-              final pgs = snapshot.data!;
-              return Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: DropdownButton<PG>(
-                  value: _selectedPG,
-                  hint: const Text('Select PG'),
-                  onChanged: (pg) => setState(() => _selectedPG = pg),
-                  items: pgs
-                      .map((pg) => DropdownMenuItem(
-                    value: pg,
-                    child: Text(pg.name),
-                  ))
-                      .toList(),
-                ),
-              );
-            },
-          ),
-          Expanded(
-            child: StreamBuilder<List<Item>>(
+      appBar: AppBar(title: const Text('Order Stock')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            StreamBuilder<List<Item>>(
               stream: _service.getItems(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const CircularProgressIndicator();
-                final items = snapshot.data!;
-                return ListView.builder(
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    _controllers.putIfAbsent(item, () => TextEditingController());
-                    return ListTile(
-                      title: Text(item.name),
-                      trailing: SizedBox(
-                        width: 60,
-                        child: TextField(
-                          controller: _controllers[item],
-                          decoration: const InputDecoration(hintText: 'Qty'),
-                          keyboardType: TextInputType.number,
-                          onChanged: (val) {
-                            int qty = int.tryParse(val) ?? 0;
-                            setState(() {
-                              if (qty > 0) {
-                                _selectedItems[item] = qty;
-                              } else {
-                                _selectedItems.remove(item);
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: ElevatedButton(
-              onPressed: () {
-                if (_selectedPG == null || _selectedItems.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Select PG and at least one item')),
-                  );
-                  return;
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
                 }
 
-                final order = Orders(
-                  id: '',
-                  pgId: _selectedPG!.id,
-                  itemIds: _selectedItems.keys.map((e) => e.id).toList(),
-                  quantity: _selectedItems.values.toList(),
-                  date: DateTime.now(),
+                final items = snapshot.data!;
+
+                // Ensure selected item still exists in updated list
+                final validSelectedItem = _selectedItem == null
+                    ? null
+                    : items.firstWhere(
+                      (item) => item.id == _selectedItem!.id,
+                  orElse: () => _selectedItem = null as Item,
                 );
 
-                _service.addOrder(order).then((_) {
-                  // Clear all input fields
-                  for (var controller in _controllers.values) {
-                    controller.clear();
-                  }
-                  _selectedItems.clear();
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Order placed successfully')),
-                  );
-                });
+                return DropdownButtonFormField<Item>(
+                  value: validSelectedItem,
+                  hint: const Text('Select Item'),
+                  onChanged: (item) => setState(() => _selectedItem = item),
+                  items: items
+                      .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(item.name),
+                  ))
+                      .toList(),
+                );
               },
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _quantityController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Enter Quantity',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: _placeOrder,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
               child: const Text('Place Order'),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

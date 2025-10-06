@@ -48,8 +48,8 @@ class FirebaseService {
   Future<void> addDistribution(Distribution dist) async {
     await _db.child('distributions').push().set({
       'pgId': dist.pgId,
-      'itemId': dist.itemId,       // single item
-      'quantity': dist.quantity,   // single quantity
+      'itemId': dist.itemId, // single item
+      'quantity': dist.quantity, // single quantity
       'date': dist.date.toIso8601String(),
     });
   }
@@ -71,8 +71,13 @@ class FirebaseService {
 
   // --- Orders ---
   Future<void> addOrder(Orders order) async {
+    // Save order record
     await _db.child('orders').push().set(order.toMap());
+
+    // Increase stock for the ordered item
+    await increaseItemStock(order.itemId, order.quantity);
   }
+
 
   Stream<List<Orders>> getOrders() {
     return _db.child('orders').onValue.map((event) {
@@ -90,6 +95,7 @@ class FirebaseService {
   }
 
   // --- Stock Management for Items ---
+  /// Reduce item stock when distributing
   Future<void> reduceItemStock(String itemId, int qty) async {
     final ref = _db.child('items/$itemId');
     final snapshot = await ref.get();
@@ -101,6 +107,19 @@ class FirebaseService {
     await ref.update({'quantity': newQty});
   }
 
+  /// Increase item stock when ordering new items
+  Future<void> increaseItemStock(String itemId, int qty) async {
+    final ref = _db.child('items/$itemId');
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+
+    final data = Map<String, dynamic>.from(snapshot.value as Map);
+    final currentQty = (data['quantity'] ?? 0) as int;
+    final newQty = currentQty + qty;
+    await ref.update({'quantity': newQty});
+  }
+
+  /// Get current quantity of item
   Future<int> getItemQuantity(String itemId) async {
     final snapshot = await _db.child('items/$itemId').get();
     if (!snapshot.exists) return 0;
@@ -109,6 +128,7 @@ class FirebaseService {
     return (data['quantity'] ?? 0) as int;
   }
 
+  /// Get limit of item
   Future<int> getItemLimit(String itemId) async {
     final snapshot = await _db.child('items/$itemId').get();
     if (!snapshot.exists) return 0;
