@@ -1,0 +1,29 @@
+name: inventory
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'  # ✅ since you are on Dart 3.4.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ✅ Latest Firebase (all compatible with firebase_core ^3.15.x)
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.6.12
+  firebase_database: ^11.3.10
+
+  # Other dependencies
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
